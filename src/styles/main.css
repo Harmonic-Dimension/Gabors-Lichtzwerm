@@ -1,0 +1,35 @@
+:root {
+  color-scheme: dark;
+  --diep: #03061a;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  overflow: hidden;
+  background: radial-gradient(ellipse at 50% 40%, #0b1038 0%, #04061c 55%, #01020c 100%);
+  font-family: 'Trebuchet MS', 'Segoe UI', system-ui, sans-serif;
+  color: #dff3ff;
+}
+
+#spel {
+  position: fixed;
+  inset: 0;
+}
+
+#spel canvas {
+  display: block;
+  touch-action: none;
+}
+
+noscript {
+  display: block;
+  padding: 2rem;
+  text-align: center;
+}

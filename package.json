@@ -1,0 +1,27 @@
+{
+  "name": "lichtzwerm",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Lichtzwerm — een spel bedacht door Gábor",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "balans": "vitest run tests/balans.test.ts",
+    "test:browser": "playwright test",
+    "test:alles": "vitest run && playwright test",
+    "schermafbeeldingen": "node scripts/maak-schermafbeeldingen.mjs"
+  },
+  "dependencies": {
+    "phaser": "^3.90.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.49.1",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.7",
+    "vitest": "^2.1.8"
+  }
+}
