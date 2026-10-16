@@ -12,7 +12,7 @@ export class Lichtkoning {
   readonly container: Phaser.GameObjects.Container;
   private lijf: Phaser.GameObjects.Graphics;
   private gezicht: Phaser.GameObjects.Graphics;
-  private kroon: Phaser.GameObjects.Container;
+  private kroon?: Phaser.GameObjects.Container;
   private gloed: Phaser.GameObjects.Image;
   private aura: Phaser.GameObjects.Image;
   private puls: Phaser.GameObjects.Image;
@@ -20,12 +20,15 @@ export class Lichtkoning {
   private krachtTekst: Phaser.GameObjects.Text;
   private tijd = 0;
   private verbaasd = 0;
+  private schok = 0;
+  private getoondLeven: number;
   /** Waar hij naar kijkt, als verschuiving van de pupillen. */
   private kijkX = 0;
   private kijkY = 0;
 
   constructor(scene: Phaser.Scene, baas: Baas, diepte: number) {
     const R = BAAS.straal;
+    this.getoondLeven = baas.leven;
 
     this.aura = scene.add
       .image(0, 0, TEX.nevel)
@@ -67,9 +70,10 @@ export class Lichtkoning {
 
     this.kroon = scene.add.container(0, -R * 1.02);
     this.tekenKroon(R);
+    const kroon = this.kroon;
 
     this.krachtTekst = scene.add
-      .text(0, R * 1.42, String(baas.kracht), {
+      .text(0, R * 1.42, String(baas.leven), {
         fontFamily: 'Trebuchet MS, Segoe UI, sans-serif',
         fontSize: '46px',
         color: '#ffd9d0',
@@ -87,7 +91,7 @@ export class Lichtkoning {
         this.lijf,
         this.gezicht,
         ...this.ogen,
-        this.kroon,
+        kroon,
         this.krachtTekst,
       ])
       .setDepth(diepte);
@@ -199,7 +203,8 @@ export class Lichtkoning {
   }
 
   private tekenKroon(R: number): void {
-    const g = this.kroon.scene.add.graphics();
+    const kroon = this.kroon!;
+    const g = kroon.scene.add.graphics();
     const b = R * 0.92;
     const h = R * 0.62;
     g.fillStyle(KLEUR.goud, 1);
@@ -227,24 +232,27 @@ export class Lichtkoning {
       g.lineStyle(3, 0x8a5b00, 0.9);
       g.strokeCircle(x, y, R * 0.11);
     }
-    const glans = this.kroon.scene.add
+    const glans = kroon.scene.add
       .image(0, -h * 0.3, TEX.gloed)
       .setBlendMode(Phaser.BlendModes.ADD)
       .setTint(0xffe9a0)
       .setAlpha(0.5)
       .setDisplaySize(R * 2.6, R * 2.0);
-    this.kroon.add([glans, g]);
+    kroon.add([glans, g]);
   }
 
-  /** De kroon losmaken (voor het overwinningsmoment). */
+  /**
+   * De kroon losmaken (voor het overwinningsmoment). Daarna laat de koning
+   * hem helemaal met rust, zodat de scene hem naar de speler kan laten vliegen.
+   */
   pakKroon(): Phaser.GameObjects.Container {
-    this.container.remove(this.kroon);
-    const wereldX = this.container.x + this.kroon.x;
-    const wereldY = this.container.y + this.kroon.y;
-    this.kroon.setPosition(wereldX, wereldY);
-    this.kroon.setDepth(this.container.depth + 2);
-    this.container.scene.add.existing(this.kroon);
-    return this.kroon;
+    const kroon = this.kroon!;
+    this.kroon = undefined;
+    this.container.remove(kroon);
+    kroon.setPosition(this.container.x + kroon.x, this.container.y + kroon.y);
+    kroon.setDepth(this.container.depth + 2);
+    this.container.scene.add.existing(kroon);
+    return kroon;
   }
 
   zetVerbaasd(): void {
@@ -252,22 +260,36 @@ export class Lichtkoning {
     this.tekenGezicht(BAAS.straal, true);
   }
 
+  /** Korte schok wanneer een lichtbolletje hem raakt. */
+  raak(): void {
+    this.schok = 1;
+  }
+
   update(baas: Baas, dt: number, spelerX: number, spelerY: number): void {
     this.tijd += dt;
+    this.schok = Math.max(0, this.schok - dt * 5);
+
+    if (baas.leven !== this.getoondLeven) {
+      this.getoondLeven = baas.leven;
+      this.krachtTekst.setText(String(baas.leven));
+    }
     const R = BAAS.straal;
     this.container.setPosition(baas.x, baas.y);
 
-    // Ademen.
+    // Ademen, plus een kort schokje bij een treffer.
     const adem = 1 + Math.sin(this.tijd * 1.6) * 0.035;
     const spanning = baas.stand === 'aankondigen' ? 1 + (baas.timer / BAAS.aankondiging) * 0.12 : 1;
-    this.container.setScale(adem * spanning);
+    this.container.setScale(adem * spanning * (1 - this.schok * 0.07));
+    this.lijf.setAlpha(1 - this.schok * 0.35);
 
     // Wiebelen.
     this.container.setRotation(Math.sin(this.tijd * 0.9) * 0.045);
 
-    // Kroon zweeft net iets anders mee.
-    this.kroon.setY(-R * 1.02 + Math.sin(this.tijd * 2.1) * R * 0.05);
-    this.kroon.setRotation(Math.sin(this.tijd * 1.3 + 0.8) * 0.08);
+    // Kroon zweeft net iets anders mee (zolang hij hem nog op heeft).
+    if (this.kroon) {
+      this.kroon.setY(-R * 1.02 + Math.sin(this.tijd * 2.1) * R * 0.05);
+      this.kroon.setRotation(Math.sin(this.tijd * 1.3 + 0.8) * 0.08);
+    }
 
     // Pupillen kijken de speler aan.
     const dx = spelerX - baas.x;
@@ -304,6 +326,129 @@ export class Lichtkoning {
     this.gloed.setDisplaySize(R * 6.2 * hartslag, R * 6.2 * hartslag);
     this.gloed.setAlpha(0.75 + Math.sin(this.tijd * 2.3) * 0.12 + (baas.stand === 'stormen' ? 0.25 : 0));
     this.aura.setRotation(this.tijd * 0.03);
-    this.krachtTekst.setAlpha(0.75 + Math.sin(this.tijd * 2) * 0.2);
+    this.krachtTekst.setAlpha(0.8 + Math.sin(this.tijd * 2) * 0.18 + this.schok * 0.2);
+    this.krachtTekst.setScale(1 + this.schok * 0.25);
   }
+}
+
+
+/**
+ * De góede Lichtkoning: wat jij wordt zodra je de boze koning verslaat.
+ * Zelfde vorm en kroon, maar blauw en vriendelijk.
+ */
+export function maakGoedeKoning(
+  scene: Phaser.Scene,
+  diepte: number,
+  metKroon = false,
+): Phaser.GameObjects.Container {
+  const R = 86;
+
+  // Een zachte halo — niet te fel, anders verdwijnt zijn vriendelijke gezicht.
+  const aura = scene.add
+    .image(0, 0, TEX.nevel)
+    .setBlendMode(Phaser.BlendModes.SCREEN)
+    .setTint(0x3f8ae8)
+    .setAlpha(0.45)
+    .setDisplaySize(R * 8, R * 8);
+
+  const lijf = scene.add.graphics();
+  const punten: Phaser.Math.Vector2[] = [];
+  const n = 44;
+  for (let i = 0; i < n; i++) {
+    const a = (i / n) * Math.PI * 2;
+    const r = R * (1 + Math.sin(a * 3 + 0.7) * 0.05 + Math.cos(a * 2 + 2.1) * 0.03);
+    punten.push(new Phaser.Math.Vector2(Math.cos(a) * r, Math.sin(a) * r * 1.03));
+  }
+  lijf.fillStyle(0x1b63c8, 0.6);
+  lijf.beginPath();
+  lijf.moveTo(punten[0].x * 1.1, punten[0].y * 1.1);
+  for (const p of punten) lijf.lineTo(p.x * 1.1, p.y * 1.1);
+  lijf.closePath();
+  lijf.fillPath();
+  lijf.fillStyle(0x3fa9ff, 1);
+  lijf.beginPath();
+  lijf.moveTo(punten[0].x, punten[0].y);
+  for (const p of punten) lijf.lineTo(p.x, p.y);
+  lijf.closePath();
+  lijf.fillPath();
+  lijf.fillStyle(0x9ff0ff, 0.55);
+  lijf.fillEllipse(-R * 0.22, -R * 0.28, R * 1.05, R * 0.82);
+  lijf.lineStyle(5, 0x0b3a78, 0.85);
+  lijf.beginPath();
+  lijf.moveTo(punten[0].x, punten[0].y);
+  for (const p of punten) lijf.lineTo(p.x, p.y);
+  lijf.closePath();
+  lijf.strokePath();
+
+  // Vriendelijk gezicht: ronde ogen, opgetrokken wenkbrauwen, brede glimlach.
+  const gezicht = scene.add.graphics();
+  const oogX = R * 0.34;
+  const oogY = -R * 0.18;
+  for (const z of [-1, 1]) {
+    gezicht.fillStyle(0xffffff, 0.96);
+    gezicht.fillCircle(z * oogX, oogY, R * 0.17);
+    gezicht.fillStyle(0x062244, 1);
+    gezicht.fillCircle(z * oogX, oogY + R * 0.02, R * 0.085);
+    gezicht.fillStyle(0xffffff, 0.9);
+    gezicht.fillCircle(z * oogX - R * 0.035, oogY - R * 0.04, R * 0.032);
+    // Blije wenkbrauw: een boogje omhoog.
+    gezicht.lineStyle(R * 0.075, 0x0b3a78, 1);
+    gezicht.beginPath();
+    for (let i = 0; i <= 12; i++) {
+      const t = i / 12;
+      const x = z * oogX + (t - 0.5) * R * 0.46;
+      const y = oogY - R * 0.34 - Math.sin(t * Math.PI) * R * 0.1;
+      if (i === 0) gezicht.moveTo(x, y);
+      else gezicht.lineTo(x, y);
+    }
+    gezicht.strokePath();
+  }
+  // Glimlach.
+  gezicht.lineStyle(R * 0.095, 0x0b3a78, 1);
+  gezicht.beginPath();
+  for (let i = 0; i <= 20; i++) {
+    const t = i / 20;
+    const x = (t - 0.5) * 2 * R * 0.5;
+    const y = R * 0.34 + Math.sin(t * Math.PI) * R * 0.26;
+    if (i === 0) gezicht.moveTo(x, y);
+    else gezicht.lineTo(x, y);
+  }
+  gezicht.strokePath();
+
+  // Let op: géén additieve gloed in deze container — die overstraalt het gezicht.
+  const delen: Phaser.GameObjects.GameObject[] = [aura, lijf, gezicht];
+
+  if (metKroon) {
+    // Een gouden kroon, dezelfde vorm als die van de boze koning.
+    const k = scene.add.graphics();
+    const b = R * 0.92;
+    const h = R * 0.62;
+    k.fillStyle(KLEUR.goud, 1);
+    k.lineStyle(4, 0x8a5b00, 0.9);
+    k.beginPath();
+    k.moveTo(-b, h * 0.45);
+    k.lineTo(-b * 0.62, -h * 0.55);
+    k.lineTo(-b * 0.31, h * 0.1);
+    k.lineTo(0, -h * 0.95);
+    k.lineTo(b * 0.31, h * 0.1);
+    k.lineTo(b * 0.62, -h * 0.55);
+    k.lineTo(b, h * 0.45);
+    k.closePath();
+    k.fillPath();
+    k.strokePath();
+    for (const [x, y] of [
+      [-b * 0.62, -h * 0.55],
+      [0, -h * 0.95],
+      [b * 0.62, -h * 0.55],
+    ] as Array<[number, number]>) {
+      k.fillStyle(0xfff0b8, 1);
+      k.fillCircle(x, y, R * 0.11);
+      k.lineStyle(3, 0x8a5b00, 0.9);
+      k.strokeCircle(x, y, R * 0.11);
+    }
+    k.setY(-R * 1.02);
+    delen.push(k);
+  }
+
+  return scene.add.container(0, 0, delen).setDepth(diepte);
 }

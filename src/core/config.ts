@@ -74,9 +74,16 @@ export const ZWERM = {
 
 export const VIJAND = {
   patrouilleSnelheid: 46,
-  /** Binnen deze afstand komt een vijandelijke groep langzaam op je af. */
-  aggroAfstand: 430,
-  achtervolgSnelheid: 160,
+  /** Binnen deze afstand merkt een vijandelijke groep je op. */
+  aggroAfstand: 520,
+  /** Sterkere groepen komen op je af — altijd langzamer dan jij. */
+  achtervolgSnelheid: 205,
+  /** Zwakkere groepen vluchten juist, maar je kunt ze inhalen. */
+  vluchtSnelheid: 235,
+  /** Hoeveel een sterkere groep je afremt als je er vlak langs vliegt (0–1). */
+  blokkeerKracht: 0.34,
+  /** Binnen deze extra afstand begint het afremmen. */
+  blokkeerBereik: 180,
   /** Na 'even sterk' botsen de groepen even niet opnieuw. */
   gelijkspelRust: 2.4,
   veer: 22,
@@ -97,6 +104,39 @@ export const BAAS = {
   /** Hoe ver hij van zijn troon weg mag zweven. */
   roamStraal: 430,
 };
+
+/**
+ * Het eindgevecht in de arena.
+ *
+ * Naar Gábors tweede tekening: een afgesloten arena waarin je losse
+ * lichtbolletjes op de Lichtkoning afschiet. Elke treffer kost jou één bolletje
+ * en haalt er één van zijn kracht af (65 → 64 → …).
+ */
+export const ARENA = {
+  straal: 860,
+  /** Zo dichtbij moet je komen voordat de arena zich sluit. */
+  startAfstand: 760,
+  /** Kosten en effect van één schot. */
+  schotKosten: 1,
+  schotSchade: 1,
+  schotAfkoeling: 0.16,
+  schotSnelheid: 920,
+  /** Hoe sterk een schot naar de koning toe buigt (het mikt dus zelf). */
+  schotStuur: 7.5,
+  schotLeven: 3.2,
+  /** Per zoveel schade laat de koning één blauw bolletje vallen. */
+  lichtPerSchade: 3,
+  /** Hoeveel bolletjes een stormaanval of rode vonk je kost. */
+  stormSchade: 2,
+  vonkSchade: 1,
+  /** Korte onkwetsbaarheid na een treffer, zodat je niet in één keer leegloopt. */
+  genadeTijd: 1.1,
+  /** Rode vonken die de koning afvuurt. */
+  vonkSnelheid: 255,
+  vonkPauze: 1.7,
+  vonkAantal: 3,
+  vonkLeven: 5,
+} as const;
 
 /** Standaard-seed; dezelfde seed geeft altijd dezelfde wereld. */
 export const STANDAARD_SEED = 20251016;

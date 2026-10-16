@@ -5,15 +5,19 @@ import { TEX } from '../textures';
 import { MAX_BOLLETJES } from '../../core/config';
 import { geluid } from '../audio';
 import { maakKnop } from '../ui/knop';
+import { maakGoedeKoning } from '../entities/Lichtkoning';
 
 const LETTER = 'Trebuchet MS, Segoe UI, sans-serif';
 
 export interface EindData {
   gewonnen: boolean;
   aantal: number;
+  /** De grootste zwerm die de speler had. */
+  piek: number;
   seconden: number;
   kracht: number;
-  doorBaas: boolean;
+  /** Waarom het spel afgelopen is. */
+  reden: 'groep' | 'baas' | 'lichtOp';
 }
 
 function tijdTekst(seconden: number): string {
@@ -94,9 +98,11 @@ export class EindScene extends Phaser.Scene {
 
     const regel = win
       ? 'Jij bent de nieuwe lichtkoning!'
-      : this.eind.doorBaas
-        ? `De Lichtkoning was te sterk. Hij heeft kracht ${this.eind.kracht}.`
-        : `Die groep was te sterk. Hij had kracht ${this.eind.kracht}.`;
+      : this.eind.reden === 'lichtOp'
+        ? `Je licht is op! De koning had nog ${this.eind.kracht} over.`
+        : this.eind.reden === 'baas'
+          ? `De Lichtkoning was te sterk. Hij heeft kracht ${this.eind.kracht}.`
+          : `Die groep was te sterk. Hij had kracht ${this.eind.kracht}.`;
 
     const sub = this.add
       .text(cx, py + ph * 0.31, regel, {
@@ -112,10 +118,12 @@ export class EindScene extends Phaser.Scene {
     const stats = this.add
       .text(
         cx,
-        py + ph * 0.52,
+        py + ph * 0.53,
         win
-          ? `Verzamelde bolletjes: ${this.eind.aantal} van de ${MAX_BOLLETJES}\nSpeeltijd: ${tijdTekst(this.eind.seconden)}`
-          : `Je had ${this.eind.aantal} ${this.eind.aantal === 1 ? 'bolletje' : 'bolletjes'}.\nProbeer eerst wat meer licht te verzamelen!`,
+          ? `Grootste zwerm: ${this.eind.piek} van de ${MAX_BOLLETJES}\nLicht over na het gevecht: ${this.eind.aantal}\nSpeeltijd: ${tijdTekst(this.eind.seconden)}`
+          : this.eind.reden === 'lichtOp'
+            ? 'Verzamel eerst meer licht:\nhoe groter je zwerm, hoe langer je het volhoudt.'
+            : `Je had ${this.eind.aantal} ${this.eind.aantal === 1 ? 'bolletje' : 'bolletjes'}.\nProbeer eerst wat meer licht te verzamelen!`,
         {
           fontFamily: LETTER,
           fontSize: `${Math.round(21 * u)}px`,
@@ -151,6 +159,21 @@ export class EindScene extends Phaser.Scene {
       .setOrigin(0.5);
 
     this.onderdelen = [scherm, gloed, paneel, titel, sub, stats, knop.container, hint];
+
+    if (win) {
+      // De góede Lichtkoning die je nu zelf bent.
+      const koning = maakGoedeKoning(this, 5, true);
+      koning.setPosition(cx, py - 30 * u).setScale(0.46 * u);
+      this.tweens.add({
+        targets: koning,
+        y: py - 42 * u,
+        duration: 1600,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut',
+      });
+      this.onderdelen.push(koning);
+    }
 
     titel.setScale(0.7);
     this.tweens.add({ targets: titel, scale: 1, duration: 420, ease: 'Back.easeOut' });

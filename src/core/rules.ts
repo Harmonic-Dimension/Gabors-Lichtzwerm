@@ -21,9 +21,23 @@ export function nieuweTelling(blauw: number, rood: number): number {
   return vergelijkGroepen(blauw, rood) === 'speler_wint' ? blauw + rood : blauw;
 }
 
-/** Kan deze zwerm de Lichtkoning verslaan? */
-export function verslaatBaas(blauw: number, baasKracht: number = BALANS.baasKracht): boolean {
+/**
+ * Is deze zwerm sterk genoeg om het gevecht in de arena aan te gaan?
+ * Je hebt er minstens één meer nodig dan de kracht van de Lichtkoning.
+ */
+export function sterkGenoegVoorArena(
+  blauw: number,
+  baasKracht: number = BALANS.baasKracht,
+): boolean {
   return blauw > baasKracht;
+}
+
+/**
+ * Hoeveel kracht de Lichtkoning overhoudt na een treffer.
+ * Eén lichtbolletje haalt er precies één af: 65 → 64 → 63 → …
+ */
+export function naTreffer(leven: number, schade = 1): number {
+  return Math.max(0, leven - schade);
 }
 
 /** Straal van de zichtbare formatie bij n bolletjes. */

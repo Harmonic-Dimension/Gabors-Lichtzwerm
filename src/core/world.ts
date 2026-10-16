@@ -158,6 +158,7 @@ export function maakWereld(seed: number = STANDAARD_SEED): Wereld {
     thuisX: WERELD.baas.x,
     thuisY: WERELD.baas.y,
     kracht: BALANS.baasKracht,
+    leven: BALANS.baasKracht,
     stand: 'zweven',
     timer: 0,
     kijkhoek: Math.PI,

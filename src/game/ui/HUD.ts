@@ -24,7 +24,14 @@ export class HUD {
   private geluidKnop: Phaser.GameObjects.Text;
   private hint: Phaser.GameObjects.Text;
   private rechtsboven: Phaser.GameObjects.Container;
+  private baasBox: Phaser.GameObjects.Container;
+  private baasPaneel: Phaser.GameObjects.Graphics;
+  private baasGetal: Phaser.GameObjects.Text;
+  private baasBalk: Phaser.GameObjects.Graphics;
+  private raakRand: Phaser.GameObjects.Graphics;
   private laatsteAantal = -1;
+  private laatsteBaas = -1;
+  private baasStart = 0;
 
   constructor(
     private scene: Phaser.Scene,
@@ -79,6 +86,36 @@ export class HUD {
       ])
       .setScrollFactor(0)
       .setDepth(d);
+
+    // Paneel van de Lichtkoning, alleen zichtbaar tijdens het eindgevecht.
+    this.baasPaneel = scene.add.graphics();
+    const baasLabel = scene.add
+      .text(0, -34, 'LICHTKONING', {
+        fontFamily: LETTER,
+        fontSize: '15px',
+        color: '#ffb0a8',
+        fontStyle: 'bold',
+      })
+      .setOrigin(0.5);
+    baasLabel.setLetterSpacing?.(3);
+    this.baasGetal = scene.add
+      .text(0, 6, '65', {
+        fontFamily: LETTER,
+        fontSize: '46px',
+        color: '#ffffff',
+        fontStyle: 'bold',
+      })
+      .setOrigin(0.5)
+      .setStroke('#55000f', 6)
+      .setShadow(0, 0, '#ff4a4a', 14, false, true);
+    this.baasBalk = scene.add.graphics();
+    this.baasBox = scene.add
+      .container(0, 0, [this.baasPaneel, this.baasBalk, baasLabel, this.baasGetal])
+      .setScrollFactor(0)
+      .setDepth(d)
+      .setAlpha(0);
+
+    this.raakRand = scene.add.graphics().setScrollFactor(0).setDepth(d + 3).setAlpha(0);
 
     this.meldingPil = scene.add.graphics();
     this.melding = scene.add
@@ -155,12 +192,24 @@ export class HUD {
 
   /** Alle UI-objecten, zodat de wereldcamera ze kan negeren. */
   objecten(): Phaser.GameObjects.GameObject[] {
-    return [this.container, this.meldingBox, this.pijl, this.pijlTekst, this.rechtsboven];
+    return [
+      this.container,
+      this.meldingBox,
+      this.pijl,
+      this.pijlTekst,
+      this.rechtsboven,
+      this.baasBox,
+      this.raakRand,
+    ];
   }
 
   herschaal(): void {
     const cam = this.scene.cameras.main;
     this.container.setPosition(0, 0);
+    this.baasBox.setPosition(cam.width / 2, 58);
+    this.raakRand.clear();
+    this.raakRand.lineStyle(44, 0xff2b3c, 0.5);
+    this.raakRand.strokeRect(-22, -22, cam.width + 44, cam.height + 44);
     this.meldingBox.setPosition(cam.width / 2, cam.height - 62);
     this.melding.setWordWrapWidth(Math.max(260, cam.width - 140));
     this.tekenPil();
@@ -170,6 +219,46 @@ export class HUD {
 
   zetGeluid(uit: boolean): void {
     this.geluidKnop.setText(uit ? '🔇' : '🔊');
+  }
+
+  /** Toont tijdens het gevecht hoeveel kracht de Lichtkoning nog heeft. */
+  private updateBaasPaneel(leven: number | null): void {
+    if (leven === null) {
+      if (this.baasBox.alpha > 0) this.baasBox.setAlpha(Math.max(0, this.baasBox.alpha - 0.06));
+      return;
+    }
+    if (this.baasBox.alpha < 1) this.baasBox.setAlpha(Math.min(1, this.baasBox.alpha + 0.05));
+    if (this.baasStart === 0) this.baasStart = leven;
+
+    if (leven !== this.laatsteBaas) {
+      this.laatsteBaas = leven;
+      this.baasGetal.setText(String(leven));
+      this.scene.tweens.killTweensOf(this.baasGetal);
+      this.baasGetal.setScale(1.22);
+      this.scene.tweens.add({ targets: this.baasGetal, scale: 1, duration: 150 });
+
+      const b = 196;
+      const h = 94;
+      const g = this.baasPaneel;
+      g.clear();
+      g.fillStyle(0x24050c, 0.6);
+      g.fillRoundedRect(-b / 2, -h / 2 - 8, b, h, 20);
+      for (let i = 0; i < 4; i++) {
+        g.lineStyle(9 - i * 2, 0xff3a46, 0.05 + i * 0.05);
+        g.strokeRoundedRect(-b / 2, -h / 2 - 8, b, h, 20);
+      }
+      g.lineStyle(2, 0xffa8a0, 0.65);
+      g.strokeRoundedRect(-b / 2, -h / 2 - 8, b, h, 20);
+
+      // Balkje dat leegloopt terwijl jij hem afbreekt.
+      const deel = this.baasStart > 0 ? leven / this.baasStart : 0;
+      const bb = this.baasBalk;
+      bb.clear();
+      bb.fillStyle(0x3d0a14, 0.9);
+      bb.fillRoundedRect(-74, 28, 148, 9, 4);
+      bb.fillStyle(0xff5a4a, 1);
+      bb.fillRoundedRect(-74, 28, Math.max(3, 148 * deel), 9, 4);
+    }
   }
 
   private tekenPil(): void {
@@ -232,7 +321,13 @@ export class HUD {
     boostLading: number,
     sterkGenoeg: boolean,
     baasRichting: { hoek: number; zichtbaar: boolean } | null,
+    baasLeven: number | null,
+    geraakt: boolean,
   ): void {
+    this.updateBaasPaneel(baasLeven);
+    this.raakRand.setAlpha(
+      geraakt ? 0.35 + Math.sin(this.scene.time.now / 70) * 0.2 : Math.max(0, this.raakRand.alpha - 0.05),
+    );
     if (aantal !== this.laatsteAantal) {
       this.getal.setText(String(aantal));
       this.laatsteAantal = aantal;

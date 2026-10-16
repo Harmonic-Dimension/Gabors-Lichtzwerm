@@ -36,7 +36,7 @@ await page.evaluate(() => {
   const v = h.model.wereld.vijanden.find((v) => v.kracht === 6);
   h.teleport(v.x - 430, v.y + 40);
 });
-await page.waitForTimeout(2200);
+await page.waitForTimeout(2600);
 await page.keyboard.down('ArrowRight');
 await page.waitForTimeout(500);
 await page.keyboard.up('ArrowRight');
@@ -55,19 +55,28 @@ await page.waitForTimeout(1400);
 await page.screenshot({ path: `${MAP}/3-lichtkoning.png` });
 console.log('3-lichtkoning.png');
 
-// Overwinning.
+// Het gevecht in de arena.
 await page.evaluate(() => {
   const h = window.__lichtzwerm;
-  h.zetAantal(68);
+  h.zetAantal(88);
+  const b = h.model.wereld.baas;
+  h.teleport(b.thuisX - 620, b.thuisY + 80);
 });
-await page.waitForTimeout(500);
-await page.keyboard.down('ArrowRight');
-await page.waitForFunction(() => window.__lichtzwerm.model.stand !== 'spelen', null, { timeout: 20000 });
-await page.keyboard.up('ArrowRight');
-await page.waitForTimeout(700);
-await page.screenshot({ path: `${MAP}/4-overwinning.png` });
-await page.waitForTimeout(3600);
-await page.screenshot({ path: `${MAP}/5-eindscherm.png` });
-console.log('4-overwinning.png, 5-eindscherm.png');
+await page.waitForFunction(() => window.__lichtzwerm.model.arenaActief, null, { timeout: 20000 });
+await page.waitForTimeout(1200);
+await page.keyboard.down('Space');
+await page.waitForFunction(() => window.__lichtzwerm.model.baasLeven < 50, null, { timeout: 30000 });
+await page.waitForTimeout(150);
+await page.screenshot({ path: `${MAP}/4-arena.png` });
+console.log('4-arena.png');
+
+// Overwinning: jij wordt zelf de goede Lichtkoning.
+await page.waitForFunction(() => window.__lichtzwerm.model.stand !== 'spelen', null, { timeout: 40000 });
+await page.keyboard.up('Space');
+await page.waitForTimeout(4200);
+await page.screenshot({ path: `${MAP}/5-goede-lichtkoning.png` });
+await page.waitForTimeout(2600);
+await page.screenshot({ path: `${MAP}/6-eindscherm.png` });
+console.log('5-goede-lichtkoning.png, 6-eindscherm.png');
 
 await browser.close();

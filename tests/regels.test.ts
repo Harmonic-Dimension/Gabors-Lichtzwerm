@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { BALANS, MAX_BOLLETJES, NODIG_VOOR_BAAS } from '../src/core/config';
-import { botsStraal, formatieStraal, nieuweTelling, vergelijkGroepen, verslaatBaas } from '../src/core/rules';
+import {
+  botsStraal,
+  formatieStraal,
+  naTreffer,
+  nieuweTelling,
+  sterkGenoegVoorArena,
+  vergelijkGroepen,
+} from '../src/core/rules';
 import { SpelModel } from '../src/core/SpelModel';
 
 describe('de hoofdregel: de grootste groep wint', () => {
@@ -43,12 +50,28 @@ describe('de Lichtkoning', () => {
     expect(NODIG_VOOR_BAAS).toBe(66);
   });
 
-  it('wordt niet verslagen met 65 bolletjes', () => {
-    expect(verslaatBaas(65)).toBe(false);
+  it('laat je de arena niet in met 65 bolletjes', () => {
+    expect(sterkGenoegVoorArena(65)).toBe(false);
   });
 
-  it('wordt wel verslagen met 66 bolletjes', () => {
-    expect(verslaatBaas(66)).toBe(true);
+  it('laat je de arena wel in met 66 bolletjes', () => {
+    expect(sterkGenoegVoorArena(66)).toBe(true);
+  });
+
+  it('verliest precies 1 kracht per treffer', () => {
+    expect(naTreffer(65)).toBe(64);
+    expect(naTreffer(1)).toBe(0);
+    expect(naTreffer(0)).toBe(0);
+  });
+
+  it('heeft 65 treffers nodig om van 65 naar 0 te gaan', () => {
+    let leven: number = BALANS.baasKracht;
+    let treffers = 0;
+    while (leven > 0) {
+      leven = naTreffer(leven);
+      treffers++;
+    }
+    expect(treffers).toBe(65);
   });
 
   it('wordt niet sterker als de speler groeit', () => {
@@ -57,6 +80,7 @@ describe('de Lichtkoning', () => {
     for (let i = 0; i < 50; i++) model.speler.bolletjes.push({ ...model.speler.bolletjes[0] });
     expect(model.wereld.baas.kracht).toBe(voor);
     expect(model.wereld.baas.kracht).toBe(65);
+    expect(model.wereld.baas.leven).toBe(65);
   });
 });
 

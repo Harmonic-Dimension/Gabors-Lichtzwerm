@@ -6,18 +6,21 @@
 import Phaser from 'phaser';
 import { maakTexturen } from '../textures';
 import { SpelModel } from '../../core/SpelModel';
-import { BAAS, NODIG_VOOR_BAAS, SPELER, WERELD } from '../../core/config';
+import { ARENA, NODIG_VOOR_BAAS, SPELER, WERELD } from '../../core/config';
 import { botsStraal, formatieStraal } from '../../core/rules';
 import type { Gebeurtenis, Invoer } from '../../core/types';
 import { KLEUR, TEX } from '../textures';
 import { Achtergrond } from '../render/Achtergrond';
 import { BolPool, mengKleur, type BolStijl } from '../render/Bolletjes';
-import { Lichtkoning } from '../entities/Lichtkoning';
+import { Lichtkoning, maakGoedeKoning } from '../entities/Lichtkoning';
 import { HUD } from '../ui/HUD';
 import { geluid } from '../audio';
 import { maakKnop } from '../ui/knop';
 
 const LETTER = 'Trebuchet MS, Segoe UI, sans-serif';
+
+/** Hoe groot de góede Lichtkoning wordt die jij zelf wordt. */
+const GOEDE_KONING_SCHAAL = 0.62;
 
 const BLAUW: BolStijl = {
   gloedKleur: KLEUR.blauwGloed,
@@ -39,6 +42,20 @@ const ROOD: BolStijl = {
   gloedMaat: 116,
   kernMaat: 11,
   gloedAlpha: 0.5,
+};
+const SCHOT: BolStijl = {
+  gloedKleur: 0x9ff4ff,
+  kernKleur: 0xffffff,
+  gloedMaat: 104,
+  kernMaat: 16,
+  gloedAlpha: 0.8,
+};
+const VONK: BolStijl = {
+  gloedKleur: 0xff5a3c,
+  kernKleur: 0xffe0b0,
+  gloedMaat: 86,
+  kernMaat: 12,
+  gloedAlpha: 0.7,
 };
 const LOS: BolStijl = {
   gloedKleur: 0x6fe0ff,
@@ -69,6 +86,11 @@ export class SpelScene extends Phaser.Scene {
   private pauzeLaag!: Phaser.GameObjects.Container;
   private troonGloed!: Phaser.GameObjects.Image;
   private spelerWolk!: Phaser.GameObjects.Image;
+  private schotPool!: BolPool;
+  private vonkPool!: BolPool;
+  private arenaRing!: Phaser.GameObjects.Graphics;
+  private arenaOpbouw = 0;
+  private goedeKoning?: Phaser.GameObjects.Container;
   /** Aparte camera voor de interface, zodat de zoom van de wereld die niet meeschaalt. */
   private uiCam!: Phaser.Cameras.Scene2D.Camera;
 
@@ -82,6 +104,7 @@ export class SpelScene extends Phaser.Scene {
     s: Phaser.Input.Keyboard.Key;
     d: Phaser.Input.Keyboard.Key;
     spatie: Phaser.Input.Keyboard.Key;
+    shift: Phaser.Input.Keyboard.Key;
   };
 
   private afgelopen = false;
@@ -109,6 +132,8 @@ export class SpelScene extends Phaser.Scene {
     this.vijandWeergave = [];
     this.gevaarWaarschuwing = 0;
     this.boostGevraagd = false;
+    this.arenaOpbouw = 0;
+    this.goedeKoning = undefined;
     this.laatsteToets = {};
 
     this.model = new SpelModel(data?.seed);
@@ -147,6 +172,9 @@ export class SpelScene extends Phaser.Scene {
         .setAlpha(0.2),
     );
     this.spelerPool = new BolPool(this, 12, 13, alsWereld);
+    this.schotPool = new BolPool(this, 15, 16, alsWereld);
+    this.vonkPool = new BolPool(this, 15, 16, alsWereld);
+    this.arenaRing = this.wereld(this.add.graphics().setDepth(-85));
 
     // Ringen en krachtlabels bij iedere vijandelijke groep.
     for (const v of w.vijanden) {
@@ -205,6 +233,8 @@ export class SpelScene extends Phaser.Scene {
       this.spelerPool.vernietig();
       this.vijandPool.vernietig();
       this.losPool.vernietig();
+      this.schotPool.vernietig();
+      this.vonkPool.vernietig();
     });
 
     this.startTijd = this.time.now;
@@ -264,6 +294,7 @@ export class SpelScene extends Phaser.Scene {
       s: kb.addKey(K.S),
       d: kb.addKey(K.D),
       spatie: kb.addKey(K.SPACE),
+      shift: kb.addKey(K.SHIFT),
     };
 
     /*
@@ -302,7 +333,7 @@ export class SpelScene extends Phaser.Scene {
   private leesInvoer(): Invoer {
     if (this.model.gepauzeerd || this.afgelopen) {
       this.boostGevraagd = false;
-      return { x: 0, y: 0, boost: false };
+      return { x: 0, y: 0, boost: false, schiet: false };
     }
     const t = this.toetsen;
     let x = 0;
@@ -311,9 +342,19 @@ export class SpelScene extends Phaser.Scene {
     if (t.rechts.isDown || t.d.isDown) x += 1;
     if (t.op.isDown || t.w.isDown) y -= 1;
     if (t.neer.isDown || t.s.isDown) y += 1;
-    const boost = t.spatie.isDown || this.boostGevraagd;
+    /*
+     * In de arena schiet de spatiebalk lichtbolletjes af; daarbuiten geeft hij
+     * een snelheidsboost. Shift doet altijd de boost, ook tijdens het gevecht.
+     */
+    const spatie = t.spatie.isDown || this.boostGevraagd;
     this.boostGevraagd = false;
-    return { x, y, boost };
+    const arena = this.model.arenaActief;
+    return {
+      x,
+      y,
+      boost: t.shift.isDown || (!arena && spatie),
+      schiet: arena && (spatie || t.spatie.isDown),
+    };
   }
 
   // ------------------------------------------------------------------ pauze
@@ -418,13 +459,15 @@ export class SpelScene extends Phaser.Scene {
       const dx = b.x + Math.cos(hoek) * 300 - this.model.speler.x;
       const dy = b.y + Math.sin(hoek) * 300 - this.model.speler.y;
       const d = Math.hypot(dx, dy) || 1;
-      this.model.naspelUpdate(dt, { x: dx / d, y: dy / d, boost: false });
+      this.model.naspelUpdate(dt, { x: dx / d, y: dy / d, boost: false, schiet: false });
     } else {
-      this.model.naspelUpdate(dt, { x: 0, y: 0, boost: false });
+      this.model.naspelUpdate(dt, { x: 0, y: 0, boost: false, schiet: false });
     }
 
     this.achtergrond.update(this.model.gepauzeerd ? 0 : dt);
+    this.tekenArena(this.model.gepauzeerd ? 0 : dt);
     this.tekenSpeler(dt);
+    this.tekenSchoten();
     this.tekenVijanden(dt);
     this.tekenLosLicht();
     this.koning.update(
@@ -438,23 +481,57 @@ export class SpelScene extends Phaser.Scene {
 
     if (this.kroon) {
       const leider = this.model.speler.bolletjes[0];
-      this.kroon.x += (leider.x - this.kroon.x) * Math.min(1, dt * 8);
-      this.kroon.y += (leider.y - 46 - this.kroon.y) * Math.min(1, dt * 8);
-      this.kroon.setScale(0.42);
+      if (this.goedeKoning) {
+        // Op zijn hoofd, en daar blijft hij ook.
+        this.kroon.setPosition(leider.x, leider.y - 74 * GOEDE_KONING_SCHAAL);
+        this.kroon.setScale(GOEDE_KONING_SCHAAL);
+        this.kroon.setRotation(this.goedeKoning.rotation);
+      } else {
+        this.kroon.x += (leider.x - this.kroon.x) * Math.min(1, dt * 8);
+        this.kroon.y += (leider.y - 46 - this.kroon.y) * Math.min(1, dt * 8);
+        this.kroon.setScale(0.42);
+      }
+    }
+    if (this.goedeKoning) {
+      const leider = this.model.speler.bolletjes[0];
+      this.goedeKoning.setPosition(leider.x, leider.y);
+      this.goedeKoning.setRotation(Math.sin(this.time.now / 700) * 0.05);
     }
   }
 
   private updateCamera(dt: number): void {
-    const s = this.model.speler;
-    // Iets vooruitkijken in de richting waarin je vliegt.
-    const doelX = s.midX + s.vx * 0.26;
-    const doelY = s.midY + s.vy * 0.26;
+    const sp = this.model.speler;
+    const b = this.model.wereld.baas;
+
+    let doelX: number;
+    let doelY: number;
+    let doelZoom: number;
+
+    if (this.model.arenaActief && !b.verslagen) {
+      // In de arena kijken we naar het midden tussen jou en de koning,
+      // zodat je allebei altijd in beeld hebt.
+      doelX = sp.midX * 0.6 + b.x * 0.4 + sp.vx * 0.12;
+      doelY = sp.midY * 0.6 + b.y * 0.4 + sp.vy * 0.12;
+      // Zoom precies zo ver uit dat jullie allebei in beeld blijven.
+      const cam = this.cameras.main;
+      const nodigX = Math.abs(sp.midX - b.x) + 820;
+      const nodigY = Math.abs(sp.midY - b.y) + 700;
+      doelZoom = Phaser.Math.Clamp(
+        Math.min(cam.width / nodigX, cam.height / nodigY),
+        0.45,
+        0.92,
+      );
+    } else {
+      // Iets vooruitkijken in de richting waarin je vliegt.
+      doelX = sp.midX + sp.vx * 0.26;
+      doelY = sp.midY + sp.vy * 0.26;
+      // Hoe groter je zwerm, hoe verder we uitzoomen — je voelt je machtig.
+      const groei = Math.min(1, (this.model.aantal - 1) / 80);
+      doelZoom = 1.06 - groei * 0.26 - (this.model.isBoostend ? 0.03 : 0);
+    }
+
     this.volgPunt.x += (doelX - this.volgPunt.x) * Math.min(1, dt * 6);
     this.volgPunt.y += (doelY - this.volgPunt.y) * Math.min(1, dt * 6);
-
-    // Hoe groter je zwerm, hoe verder we uitzoomen — je voelt je machtig.
-    const groei = Math.min(1, (this.model.aantal - 1) / 80);
-    const doelZoom = 1.06 - groei * 0.26 - (this.model.isBoostend ? 0.03 : 0);
     const cam = this.cameras.main;
     cam.setZoom(cam.zoom + (doelZoom - cam.zoom) * Math.min(1, dt * 1.6));
   }
@@ -481,6 +558,8 @@ export class SpelScene extends Phaser.Scene {
     for (let i = 0; i < s.bolletjes.length; i++) {
       const b = s.bolletjes[i];
       const leider = i === 0;
+      // Zodra jij de góede Lichtkoning bent, is hij de leider — geen bolletje.
+      if (leider && this.goedeKoning) continue;
       const stijl = leider ? LEIDER : BLAUW;
       const puls = 0.82 + Math.sin(t * 2.4 + b.fase) * 0.18;
 
@@ -588,6 +667,71 @@ export class SpelScene extends Phaser.Scene {
     }
   }
 
+  /** De arena: een gloeiende ring die zich om jullie beiden sluit. */
+  private tekenArena(dt: number): void {
+    const g = this.arenaRing;
+    if (!this.model.arenaActief && this.arenaOpbouw <= 0) {
+      if (g.visible) g.setVisible(false).clear();
+      return;
+    }
+    this.arenaOpbouw = Phaser.Math.Clamp(
+      this.arenaOpbouw + dt * (this.model.arenaActief ? 1.3 : -2),
+      0,
+      1,
+    );
+    const b = this.model.wereld.baas;
+    const t = this.model.tijd;
+    const soepel = this.arenaOpbouw * this.arenaOpbouw * (3 - 2 * this.arenaOpbouw);
+    const r = ARENA.straal * (0.28 + 0.72 * soepel);
+
+    g.setVisible(true);
+    g.clear();
+    // Brede zachte gloed naar binnen toe.
+    for (let i = 0; i < 6; i++) {
+      g.lineStyle(70 - i * 11, 0xff2d4a, (0.03 + i * 0.016) * soepel);
+      g.strokeCircle(b.thuisX, b.thuisY, r - i * 12);
+    }
+    // Scherpe rand met een rustige puls.
+    const puls = 0.55 + Math.sin(t * 2.2) * 0.16;
+    g.lineStyle(4, 0xff8a7a, puls * soepel);
+    g.strokeCircle(b.thuisX, b.thuisY, r);
+    g.lineStyle(1.5, 0xffd9c0, 0.5 * soepel);
+    g.strokeCircle(b.thuisX, b.thuisY, r - 10);
+
+    // Lichtpunten die langs de rand draaien, als fakkels om een arena.
+    const fakkels = 20;
+    for (let i = 0; i < fakkels; i++) {
+      const hoek = (i / fakkels) * Math.PI * 2 + t * 0.12;
+      const fx = b.thuisX + Math.cos(hoek) * r;
+      const fy = b.thuisY + Math.sin(hoek) * r;
+      g.fillStyle(0xffb0a0, (0.35 + Math.sin(t * 3 + i) * 0.2) * soepel);
+      g.fillCircle(fx, fy, 6);
+    }
+  }
+
+  /** Jouw lichtbolletjes onderweg naar de koning, en zijn rode vonken. */
+  private tekenSchoten(): void {
+    const t = this.model.tijd;
+    this.schotPool.begin();
+    for (const sc of this.model.schoten) {
+      const puls = 0.9 + Math.sin(t * 20 + sc.maat * 10) * 0.1;
+      this.schotPool.teken(sc.x, sc.y, SCHOT, sc.maat * 1.15, puls);
+      this.sporen.lineStyle(6 * sc.maat, 0x9ff4ff, 0.5);
+      this.sporen.beginPath();
+      this.sporen.moveTo(sc.x, sc.y);
+      this.sporen.lineTo(sc.x - sc.vx * 0.045, sc.y - sc.vy * 0.045);
+      this.sporen.strokePath();
+    }
+    this.schotPool.eind();
+
+    this.vonkPool.begin();
+    for (const v of this.model.vonken) {
+      const puls = 0.75 + Math.sin(t * 9 + v.fase) * 0.25;
+      this.vonkPool.teken(v.x, v.y, VONK, 1, puls);
+    }
+    this.vonkPool.eind();
+  }
+
   private tekenLosLicht(): void {
     const pool = this.losPool;
     pool.begin();
@@ -611,10 +755,14 @@ export class SpelScene extends Phaser.Scene {
       b.y > cam.worldView.y - 200 &&
       b.y < cam.worldView.bottom + 200;
     const hoek = Math.atan2(b.y - this.model.speler.midY, b.x - this.model.speler.midX);
-    this.hud.update(this.model.aantal, this.model.boostLading, this.model.sterkGenoegVoorBaas, {
-      hoek,
-      zichtbaar: zichtbaar || b.verslagen,
-    });
+    this.hud.update(
+      this.model.aantal,
+      this.model.boostLading,
+      this.model.sterkGenoegVoorBaas || this.model.arenaActief,
+      { hoek, zichtbaar: zichtbaar || b.verslagen },
+      this.model.arenaActief && !b.verslagen ? b.leven : null,
+      this.model.speler.genade > 0,
+    );
     this.troonGloed.setAlpha(b.verslagen ? 0 : 0.26 + Math.sin(this.model.tijd * 0.9) * 0.06);
   }
 
@@ -659,8 +807,36 @@ export class SpelScene extends Phaser.Scene {
         case 'baas_stormt':
           this.cameras.main.shake(180, 0.004);
           break;
+        case 'arena_start':
+          geluid.arenaStart();
+          this.cameras.main.shake(500, 0.004);
+          this.hud.toon('De arena! Spatie = schieten · Shift = boost', '#ffc9b0', 4200);
+          break;
+        case 'geschoten':
+          geluid.schot();
+          break;
+        case 'baas_geraakt':
+          geluid.baasGeraakt(e.leven);
+          this.koning.raak();
+          this.flits(e.x, e.y, 0xffd9b0, 110);
+          this.vonken(e.x, e.y, 4, 0xffc9a0, 180);
+          break;
+        case 'licht_gevallen':
+          geluid.verzamel(3);
+          this.flits(e.x, e.y, 0x7fe8ff, 150);
+          this.vonken(e.x, e.y, 10, 0x9ff4ff, 190);
+          break;
+        case 'speler_geraakt':
+          geluid.spelerGeraakt();
+          this.cameras.main.shake(220, 0.005);
+          this.vonken(this.model.speler.midX, this.model.speler.midY, 14, 0xff6a5a, 260);
+          this.hud.vierTelling();
+          break;
+        case 'baas_vonken':
+          geluid.baasDreigt();
+          break;
         case 'verloren':
-          this.verliesMoment(e.x, e.y, e.kracht, e.doorBaas);
+          this.verliesMoment(e.x, e.y, e.kracht);
           break;
         case 'baas_verslagen':
           this.overwinningsMoment(e.x, e.y);
@@ -735,7 +911,7 @@ export class SpelScene extends Phaser.Scene {
 
   // --------------------------------------------------------- eindmomenten
 
-  private verliesMoment(x: number, y: number, kracht: number, doorBaas: boolean): void {
+  private verliesMoment(x: number, y: number, kracht: number): void {
     this.afgelopen = true;
     geluid.verloren();
     this.cameras.main.shake(260, 0.006);
@@ -747,16 +923,17 @@ export class SpelScene extends Phaser.Scene {
       this.scene.launch('Eind', {
         gewonnen: false,
         aantal: this.model.aantal,
+        piek: this.model.piek,
         seconden: (this.time.now - this.startTijd) / 1000,
         kracht,
-        doorBaas,
+        reden: this.model.verlorenReden,
       });
     });
   }
 
   private overwinningsMoment(x: number, y: number): void {
     this.afgelopen = true;
-    this.feestTimer = 3.4;
+    this.feestTimer = 4.6;
     geluid.gewonnen();
 
     this.koning.zetVerbaasd();
@@ -776,27 +953,47 @@ export class SpelScene extends Phaser.Scene {
     this.time.delayedCall(620, () => {
       this.koning.container.setVisible(false);
       this.cameras.main.shake(340, 0.005);
-      // Geen schermvullende flits, maar een grote gouden lichtbloem op zijn plek.
       this.flits(x, y, 0xffd36b, 560);
       this.flits(x, y, 0xffffff, 300);
       this.vonken(x, y, 46, 0xff5a4a, 560);
       this.vonken(x, y, 40, 0x7fe8ff, 480);
       this.vonken(x, y, 36, 0xffd36b, 420);
-      this.hud.toon('De Lichtkoning is verslagen!', '#ffe9a8', 2600);
+      this.hud.toon('De Lichtkoning is verslagen!', '#ffe9a8', 2400);
     });
 
-    // 5. De kroon landt op het leidende blauwe bolletje.
+    // 5. De kroon landt op het leidende blauwe bolletje …
     this.time.delayedCall(1500, () => {
       this.kroon = kroon;
     });
 
-    this.time.delayedCall(3600, () => {
+    // 6. … en jij verandert zelf in de nieuwe, góede Lichtkoning.
+    this.time.delayedCall(2300, () => {
+      const leider = this.model.speler.bolletjes[0];
+      this.goedeKoning = this.wereld(maakGoedeKoning(this, 14));
+      this.goedeKoning.setPosition(leider.x, leider.y).setScale(0.02);
+      // De kroon hoort vóór zijn hoofd te zitten, niet erachter.
+      kroon.setDepth(15);
+      this.tweens.add({
+        targets: this.goedeKoning,
+        scale: GOEDE_KONING_SCHAAL,
+        duration: 700,
+        ease: 'Back.easeOut',
+      });
+      this.flits(leider.x, leider.y, 0x9ff4ff, 420);
+      this.vonken(leider.x, leider.y, 30, 0x9ff4ff, 360);
+      this.vonken(leider.x, leider.y, 18, 0xffd36b, 300);
+      geluid.sterkGenoeg();
+      this.hud.toon('Jij bent nu de Lichtkoning!', '#bff0ff', 2600);
+    });
+
+    this.time.delayedCall(4800, () => {
       this.scene.launch('Eind', {
         gewonnen: true,
         aantal: this.model.aantal,
+        piek: this.model.piek,
         seconden: (this.time.now - this.startTijd) / 1000,
-        kracht: BAAS ? this.model.wereld.baas.kracht : 0,
-        doorBaas: true,
+        kracht: this.model.wereld.baas.kracht,
+        reden: 'baas',
       });
     });
   }

@@ -130,7 +130,7 @@ export class MenuScene extends Phaser.Scene {
       .setDepth(4);
 
     const onder = this.add
-      .text(cx, titelY + titelGrootte * 0.82, 'Een spel bedacht door Gábor', {
+      .text(cx, titelY + titelGrootte * 0.82, 'Een spel bedacht door Gábor Hulshof', {
         fontFamily: LETTER,
         fontSize: `${Math.round(23 * u)}px`,
         color: '#a9d9ff',
@@ -181,14 +181,17 @@ export class MenuScene extends Phaser.Scene {
       );
     });
 
-    const klein = this.add
-      .text(cx, uitlegY + 3 * regelHoogte + Math.round(14 * u), 'Spatie = supersnel!', {
-        fontFamily: LETTER,
-        fontSize: `${Math.round(17 * u)}px`,
-        color: '#7fb6e8',
-      })
-      .setOrigin(0.5)
-      .setDepth(6);
+    const kleineRegels = ['Spatie = supersnel!', 'In de arena: spatie = schieten'];
+    const klein: Phaser.GameObjects.Text[] = kleineRegels.map((r, i) =>
+      this.add
+        .text(cx, uitlegY + 3 * regelHoogte + Math.round((14 + i * 22) * u), r, {
+          fontFamily: LETTER,
+          fontSize: `${Math.round(17 * u)}px`,
+          color: '#7fb6e8',
+        })
+        .setOrigin(0.5)
+        .setDepth(6),
+    );
 
     this.geluidKnop = this.add
       .text(cam.width - 42, 34, geluid.uit ? '🔇' : '🔊', { fontFamily: LETTER, fontSize: '26px' })
@@ -201,7 +204,7 @@ export class MenuScene extends Phaser.Scene {
         this.geluidKnop.setText(geluid.wissel() ? '🔇' : '🔊');
       });
 
-    this.onderdelen = [gloed, titel, onder, knopGloed, knop.container, ...uitleg, klein, this.geluidKnop];
+    this.onderdelen = [gloed, titel, onder, knopGloed, knop.container, ...uitleg, ...klein, this.geluidKnop];
   }
 
   private speel(): void {

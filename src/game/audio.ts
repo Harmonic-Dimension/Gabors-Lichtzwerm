@@ -187,6 +187,33 @@ class Geluid {
     [659, 880, 1175].forEach((f, i) => this.toon(f, i * 0.09, 0.4, 0.12, 'triangle'));
   }
 
+  /** Kort, droog plopje wanneer je een lichtbolletje afschiet. */
+  schot(): void {
+    if (!this.knijp('schot', 45)) return;
+    this.toon(880, 0, 0.09, 0.09, 'triangle', 1500);
+  }
+
+  /** De koning krijgt een treffer: zijn kracht gaat met 1 omlaag. */
+  baasGeraakt(leven: number): void {
+    if (!this.knijp('raak', 40)) return;
+    // Hoe lager zijn kracht, hoe hoger het toontje — je hoort de voortgang.
+    const f = 220 + (1 - leven / 65) * 420;
+    this.toon(f, 0, 0.12, 0.1, 'square', f * 0.7);
+    this.ruis(0, 0.08, 0.04, 2200);
+  }
+
+  spelerGeraakt(): void {
+    this.toon(240, 0, 0.26, 0.15, 'sawtooth', 110);
+    this.ruis(0, 0.2, 0.08, 600);
+  }
+
+  arenaStart(): void {
+    this.toon(70, 0, 1.9, 0.2, 'sine', 54);
+    this.toon(105, 0.05, 1.7, 0.11, 'triangle', 84);
+    [0, 3, 7].forEach((h, i) => this.toon(196 * Math.pow(2, h / 12), 0.3 + i * 0.1, 0.8, 0.07, 'sine'));
+    this.ruis(0, 1.1, 0.06, 420);
+  }
+
   klik(): void {
     this.toon(620, 0, 0.09, 0.12, 'triangle', 880);
   }

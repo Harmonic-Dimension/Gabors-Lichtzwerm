@@ -10,6 +10,9 @@ import { test, expect, type Page } from '@playwright/test';
 type Haak = {
   model: {
     aantal: number;
+    arenaActief: boolean;
+    baasLeven: number;
+    verlorenReden: 'groep' | 'baas' | 'lichtOp';
     stand: 'spelen' | 'gewonnen' | 'verloren';
     gepauzeerd: boolean;
     tijd: number;
@@ -19,7 +22,7 @@ type Haak = {
     verlorenTegen: number;
     speler: { x: number; y: number; midX: number; midY: number };
     wereld: {
-      baas: { x: number; y: number; kracht: number; verslagen: boolean };
+      baas: { x: number; y: number; thuisX: number; thuisY: number; kracht: number; leven: number; verslagen: boolean };
       vijanden: Array<{ x: number; y: number; kracht: number; verslagen: boolean; rust: number }>;
       losseBolletjes: Array<{ x: number; y: number; verzameld: boolean }>;
     };
@@ -198,31 +201,72 @@ test('9. de boost werkt en heeft een afkoeltijd', async ({ page }) => {
   expect(await model(page, (h) => h.model.boostLading)).toBeLessThan(1);
 });
 
-test('10+11. de eindbaas wordt gevonden en verslagen, met overwinningsscherm', async ({ page }) => {
+test('10. de arena sluit zich zodra je sterk genoeg bent', async ({ page }) => {
   await startSpel(page);
   await page.evaluate(() => {
     const h = window.__lichtzwerm;
-    h.zetAantal(66);
+    h.zetAantal(70);
     const b = h.model.wereld.baas;
-    h.teleport(b.x - 220, b.y);
+    h.teleport(b.thuisX - 600, b.thuisY);
   });
-  await houdToets(page, 'ArrowRight', 1500);
-  await expect.poll(() => model(page, (h) => h.model.stand), { timeout: 20_000 }).toBe('gewonnen');
+  await expect.poll(() => model(page, (h) => h.model.arenaActief), { timeout: 20_000 }).toBe(true);
+  expect(await model(page, (h) => h.model.baasLeven)).toBe(65);
+});
+
+test('10b. schieten kost een bolletje en haalt kracht van de koning af', async ({ page }) => {
+  await startSpel(page);
+  await page.evaluate(() => {
+    const h = window.__lichtzwerm;
+    h.zetAantal(70);
+    const b = h.model.wereld.baas;
+    h.teleport(b.thuisX - 520, b.thuisY);
+  });
+  await expect.poll(() => model(page, (h) => h.model.arenaActief), { timeout: 20_000 }).toBe(true);
+
+  const voor = await model(page, (h) => h.model.aantal);
+  await page.keyboard.down('Space');
+  await page.waitForTimeout(1600);
+  await page.keyboard.up('Space');
+
+  const na = await model(page, (h) => ({ aantal: h.model.aantal, leven: h.model.baasLeven }));
+  expect(na.leven).toBeLessThan(65);
+  expect(na.aantal).toBeLessThan(voor);
+  // Elke treffer is precies één kracht, dus wat hij kwijt is, heb jij afgevuurd.
+  expect(65 - na.leven).toBeLessThanOrEqual(voor - na.aantal);
+});
+
+test('11. de koning wordt verslagen en het overwinningsscherm verschijnt', async ({ page }) => {
+  await startSpel(page);
+  await page.evaluate(() => {
+    const h = window.__lichtzwerm;
+    h.zetAantal(97);
+    const b = h.model.wereld.baas;
+    h.teleport(b.thuisX - 520, b.thuisY);
+  });
+  await expect.poll(() => model(page, (h) => h.model.arenaActief), { timeout: 20_000 }).toBe(true);
+  await page.keyboard.down('Space');
+  await expect.poll(() => model(page, (h) => h.model.stand), { timeout: 40_000 }).toBe('gewonnen');
+  await page.keyboard.up('Space');
+  expect(await model(page, (h) => h.model.baasLeven)).toBe(0);
   await expect
     .poll(() => page.evaluate(() => window.__spel.scene.isActive('Eind')), { timeout: 20_000 })
     .toBe(true);
 });
 
-test('10b. de eindbaas verslaat een speler met 65 bolletjes', async ({ page }) => {
+test('11b. de eindbaas verslaat een speler met 65 bolletjes: de arena blijft dicht', async ({
+  page,
+}) => {
   await startSpel(page);
   await page.evaluate(() => {
     const h = window.__lichtzwerm;
     h.zetAantal(65);
     const b = h.model.wereld.baas;
-    h.teleport(b.x - 200, b.y);
+    h.teleport(b.thuisX - 200, b.thuisY);
   });
   await houdToets(page, 'ArrowRight', 1500);
   await expect.poll(() => model(page, (h) => h.model.stand), { timeout: 20_000 }).toBe('verloren');
+  expect(await model(page, (h) => h.model.arenaActief)).toBe(false);
+  expect(await model(page, (h) => h.model.verlorenReden)).toBe('baas');
 });
 
 test('12. het spel kan opnieuw gestart worden', async ({ page }) => {
@@ -271,12 +315,15 @@ test('13. een volledige speelsessie levert geen ernstige console errors op', asy
   await startSpel(page);
   await page.evaluate(() => {
     const h = window.__lichtzwerm;
-    h.zetAantal(66);
+    h.zetAantal(97);
     const b = h.model.wereld.baas;
-    h.teleport(b.x - 200, b.y);
+    h.teleport(b.thuisX - 520, b.thuisY);
   });
-  await houdToets(page, 'ArrowRight', 1500);
-  await expect.poll(() => model(page, (h) => h.model.stand), { timeout: 20_000 }).toBe('gewonnen');
-  await page.waitForTimeout(1500);
+  await expect.poll(() => model(page, (h) => h.model.arenaActief), { timeout: 20_000 }).toBe(true);
+  await page.keyboard.down('Space');
+  await expect.poll(() => model(page, (h) => h.model.stand), { timeout: 40_000 }).toBe('gewonnen');
+  await page.keyboard.up('Space');
+  // De hele overwinningsscène uitspelen, inclusief de goede Lichtkoning.
+  await page.waitForTimeout(6000);
   expect(fouten).toEqual([]);
 });

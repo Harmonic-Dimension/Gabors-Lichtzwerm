@@ -58,6 +58,26 @@ export interface Nevel {
 
 export type BaasStand = 'zweven' | 'aankondigen' | 'stormen' | 'herstellen' | 'verslagen';
 
+/** Een blauw lichtbolletje dat je op de Lichtkoning afschiet. */
+export interface Schot {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  leven: number;
+  maat: number;
+}
+
+/** Een rode vonk die de Lichtkoning afvuurt. */
+export interface Vonk {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  leven: number;
+  fase: number;
+}
+
 export interface Baas {
   x: number;
   y: number;
@@ -65,7 +85,10 @@ export interface Baas {
   vy: number;
   thuisX: number;
   thuisY: number;
+  /** Zijn startkracht (65). Verandert nooit. */
   kracht: number;
+  /** Wat er nog van over is tijdens het gevecht; 0 = verslagen. */
+  leven: number;
   stand: BaasStand;
   timer: number;
   /** Richting waarin hij kijkt, in radialen. */
@@ -84,6 +107,12 @@ export type Gebeurtenis =
   | { soort: 'baas_aankondiging'; x: number; y: number }
   | { soort: 'baas_stormt'; x: number; y: number }
   | { soort: 'baas_verslagen'; x: number; y: number }
+  | { soort: 'arena_start'; x: number; y: number }
+  | { soort: 'geschoten'; x: number; y: number }
+  | { soort: 'baas_geraakt'; x: number; y: number; leven: number }
+  | { soort: 'licht_gevallen'; x: number; y: number }
+  | { soort: 'speler_geraakt'; x: number; y: number; verlies: number }
+  | { soort: 'baas_vonken'; x: number; y: number }
   | { soort: 'sterk_genoeg' }
   | { soort: 'boost'; x: number; y: number }
   | { soort: 'grens' };
@@ -92,6 +121,8 @@ export interface Invoer {
   x: number;
   y: number;
   boost: boolean;
+  /** In de arena: een lichtbolletje afschieten. */
+  schiet: boolean;
 }
 
 export type SpelStand = 'spelen' | 'gewonnen' | 'verloren';

@@ -108,6 +108,10 @@ type Strategie = 'voorzichtig' | 'winstjager' | 'verzamelaar';
 interface Resultaat {
   gewonnen: boolean;
   aantal: number;
+  /** Het hoogste aantal bolletjes dat de speler ooit had. */
+  piek: number;
+  /** Aantal bolletjes op het moment dat de arena sloot. */
+  bijArena: number;
   seconden: number;
   reden: string;
 }
@@ -116,11 +120,52 @@ function speel(strategie: Strategie, seed: number, maxSeconden = 900): Resultaat
   const model = new SpelModel(seed);
   const dt = 1 / 60;
   let t = 0;
+  let piek = 1;
+  let bijArena = 0;
 
   while (t < maxSeconden && model.stand === 'spelen') {
     const sx = model.speler.midX;
     const sy = model.speler.midY;
     const afstand = (o: { x: number; y: number }) => Math.hypot(o.x - sx, o.y - sy);
+
+    piek = Math.max(piek, model.aantal);
+    if (model.arenaActief && bijArena === 0) bijArena = model.aantal;
+
+    // ---------------------------------------------------- het arenagevecht
+    if (model.arenaActief) {
+      const b = model.wereld.baas;
+      const licht = model.wereld.losseBolletjes.filter((o) => !o.verzameld);
+      let dx: number;
+      let dy: number;
+      if (licht.length) {
+        // Gevallen licht oprapen: dat houdt je gevecht gaande.
+        const doel = licht.reduce((a, c) => (afstand(a) < afstand(c) ? a : c));
+        dx = doel.x - model.speler.x;
+        dy = doel.y - model.speler.y;
+      } else {
+        // Anders op veilige afstand om de koning heen cirkelen.
+        const hoek = Math.atan2(sy - b.y, sx - b.x) + 0.9;
+        dx = b.x + Math.cos(hoek) * 470 - model.speler.x;
+        dy = b.y + Math.sin(hoek) * 470 - model.speler.y;
+      }
+      let nx = dx;
+      let ny = dy;
+      const duw = (ox: number, oy: number, veilig: number, kracht: number) => {
+        const ax = model.speler.x - ox;
+        const ay = model.speler.y - oy;
+        const ad = Math.hypot(ax, ay) || 1;
+        if (ad < veilig) {
+          nx += (ax / ad) * (1 - ad / veilig) * kracht;
+          ny += (ay / ad) * (1 - ad / veilig) * kracht;
+        }
+      };
+      duw(b.x, b.y, 330, 900);
+      for (const v of model.vonken) duw(v.x, v.y, 110, 700);
+      const nl = Math.hypot(nx, ny) || 1;
+      model.update(dt, { x: nx / nl, y: ny / nl, boost: false, schiet: true });
+      t += dt;
+      continue;
+    }
 
     const losVrij = model.wereld.losseBolletjes.filter((o) => !o.verzameld);
     const teVerslaan = model.wereld.vijanden.filter((v) => !v.verslagen && v.kracht < model.aantal);
@@ -144,7 +189,9 @@ function speel(strategie: Strategie, seed: number, maxSeconden = 900): Resultaat
       if (kandidaten.length) doel = kandidaten.reduce((a, b) => (a.score < b.score ? a : b));
     }
 
-    if (!doel) return { gewonnen: false, aantal: model.aantal, seconden: t, reden: 'geen doel meer' };
+    if (!doel) {
+      return { gewonnen: false, aantal: model.aantal, piek, bijArena, seconden: t, reden: 'geen doel meer' };
+    }
 
     let dx = doel.x - model.speler.x;
     let dy = doel.y - model.speler.y;
@@ -172,13 +219,15 @@ function speel(strategie: Strategie, seed: number, maxSeconden = 900): Resultaat
     if (model.aantal <= model.wereld.baas.kracht) mijd(model.wereld.baas.x, model.wereld.baas.y, 190);
 
     const nl = Math.hypot(dx, dy) || 1;
-    model.update(dt, { x: dx / nl, y: dy / nl, boost: model.boostKlaar });
+    model.update(dt, { x: dx / nl, y: dy / nl, boost: model.boostKlaar, schiet: false });
     t += dt;
   }
 
   return {
     gewonnen: model.stand === 'gewonnen',
     aantal: model.aantal,
+    piek,
+    bijArena,
     seconden: t,
     reden: model.stand,
   };
@@ -192,10 +241,13 @@ describe('botsimulatie met verschillende strategieën', () => {
       const r = speel(strategie, 20251016);
       // eslint-disable-next-line no-console
       console.log(
-        `  ${strategie.padEnd(12)} → ${r.gewonnen ? 'GEWONNEN' : r.reden} met ${r.aantal} bolletjes in ${r.seconden.toFixed(0)}s`,
+        `  ${strategie.padEnd(12)} → ${r.gewonnen ? 'GEWONNEN' : r.reden} · piek ${r.piek} · arena met ${r.bijArena} · over ${r.aantal} · ${r.seconden.toFixed(0)}s`,
       );
-      expect(r.aantal).toBeGreaterThanOrEqual(NODIG_VOOR_BAAS);
+      expect(r.piek).toBeGreaterThanOrEqual(NODIG_VOOR_BAAS);
+      expect(r.bijArena).toBeGreaterThanOrEqual(NODIG_VOOR_BAAS);
       expect(r.gewonnen).toBe(true);
+      // Na het gevecht moet er licht overblijven — anders is de balans te krap.
+      expect(r.aantal).toBeGreaterThan(0);
     });
   }
 
@@ -203,7 +255,9 @@ describe('botsimulatie met verschillende strategieën', () => {
     for (const seed of [1, 777, 31337]) {
       const r = speel('voorzichtig', seed);
       // eslint-disable-next-line no-console
-      console.log(`  seed ${String(seed).padEnd(7)} → ${r.gewonnen ? 'GEWONNEN' : r.reden} (${r.aantal}) in ${r.seconden.toFixed(0)}s`);
+      console.log(
+        `  seed ${String(seed).padEnd(7)} → ${r.gewonnen ? 'GEWONNEN' : r.reden} · arena met ${r.bijArena} · over ${r.aantal} · ${r.seconden.toFixed(0)}s`,
+      );
       expect(r.gewonnen).toBe(true);
     }
   });
@@ -226,7 +280,7 @@ describe('botsimulatie met verschillende strategieën', () => {
       const dx = doel.x - model.speler.x;
       const dy = doel.y - model.speler.y;
       const d = Math.hypot(dx, dy) || 1;
-      for (const e of model.update(dt, { x: dx / d, y: dy / d, boost: false })) {
+      for (const e of model.update(dt, { x: dx / d, y: dy / d, boost: false, schiet: false })) {
         if (e.soort === 'verzameld') verwacht += 1;
         if (e.soort === 'verslagen') verwacht += e.winst;
         if (e.soort === 'verzameld' || e.soort === 'verslagen') {
