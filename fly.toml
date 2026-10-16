@@ -32,6 +32,6 @@ primary_region = "ams"
   path = "/"
 
 [[vm]]
+  # nginx gebruikt hier zo'n 15 MB; dit is ruim voldoende.
   size = "shared-cpu-1x"
   memory = "256mb"
-  cpus = 1
