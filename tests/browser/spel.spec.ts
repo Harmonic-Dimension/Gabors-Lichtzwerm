@@ -6,37 +6,7 @@
  * (model, teleport, zetAantal) zodat we niet minutenlang hoeven te spelen.
  */
 import { test, expect, type Page } from '@playwright/test';
-
-type Haak = {
-  model: {
-    aantal: number;
-    arenaActief: boolean;
-    baasLeven: number;
-    verlorenReden: 'groep' | 'baas' | 'lichtOp';
-    stand: 'spelen' | 'gewonnen' | 'verloren';
-    gepauzeerd: boolean;
-    tijd: number;
-    boostKlaar: boolean;
-    boostLading: number;
-    isBoostend: boolean;
-    verlorenTegen: number;
-    speler: { x: number; y: number; midX: number; midY: number };
-    wereld: {
-      baas: { x: number; y: number; thuisX: number; thuisY: number; kracht: number; leven: number; verslagen: boolean };
-      vijanden: Array<{ x: number; y: number; kracht: number; verslagen: boolean; rust: number }>;
-      losseBolletjes: Array<{ x: number; y: number; verzameld: boolean }>;
-    };
-  };
-  zetAantal: (n: number) => void;
-  teleport: (x: number, y: number) => void;
-};
-
-declare global {
-  interface Window {
-    __spel: { scene: { getScene: (k: string) => unknown; isActive: (k: string) => boolean } };
-    __lichtzwerm: Haak;
-  }
-}
+import type { Haak } from './haak';
 
 const fouten: string[] = [];
 
@@ -75,6 +45,13 @@ async function model<T>(page: Page, fn: (h: Haak) => T): Promise<T> {
     await haak.dispose();
   }
 }
+
+test('0. op een desktop verschijnen er géén knoppen op het scherm', async ({ page }) => {
+  await startSpel(page);
+  expect(
+    await page.evaluate(() => !!window.__lichtzwerm.scene.aanraak),
+  ).toBe(false);
+});
 
 test('1. het startscherm verschijnt zonder fouten', async ({ page }) => {
   await expect

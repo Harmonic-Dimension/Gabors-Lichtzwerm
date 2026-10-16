@@ -13,14 +13,23 @@ body {
   padding: 0;
   height: 100%;
   overflow: hidden;
+  overscroll-behavior: none;
   background: radial-gradient(ellipse at 50% 40%, #0b1038 0%, #04061c 55%, #01020c 100%);
   font-family: 'Trebuchet MS', 'Segoe UI', system-ui, sans-serif;
   color: #dff3ff;
+  /* Op een telefoon mag niets geselecteerd, gezoomd of blauw opgelicht worden. */
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
 }
 
 #spel {
   position: fixed;
   inset: 0;
+  /* Blijf uit de camera-inkeping en de thuisbalk van telefoons. */
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom)
+    env(safe-area-inset-left);
 }
 
 #spel canvas {

@@ -1,0 +1,26 @@
+# Netlify-configuratie voor Lichtzwerm.
+# Verbind deze map met een Netlify-site; de rest gaat vanzelf.
+
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "22"
+
+# Het spel is één pagina zonder router, maar dit vangt typefouten in de URL op.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+# De gebouwde bestanden hebben een hash in hun naam en veranderen nooit meer.
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+[[headers]]
+  for = "/index.html"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"

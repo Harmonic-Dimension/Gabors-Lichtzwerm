@@ -22,6 +22,7 @@ export class HUD {
   private pijl: Phaser.GameObjects.Image;
   private pijlTekst: Phaser.GameObjects.Text;
   private geluidKnop: Phaser.GameObjects.Text;
+  private pauzeKnop: Phaser.GameObjects.Text;
   private hint: Phaser.GameObjects.Text;
   private rechtsboven: Phaser.GameObjects.Container;
   private baasBox: Phaser.GameObjects.Container;
@@ -30,12 +31,15 @@ export class HUD {
   private baasBalk: Phaser.GameObjects.Graphics;
   private raakRand: Phaser.GameObjects.Graphics;
   private laatsteAantal = -1;
+  private aanraking = false;
+  private schaal = 1;
   private laatsteBaas = -1;
   private baasStart = 0;
 
   constructor(
     private scene: Phaser.Scene,
     opGeluidKnop: () => void,
+    opPauzeKnop: () => void = () => {},
   ) {
     const d = 1000;
     this.paneel = scene.add.graphics();
@@ -169,8 +173,16 @@ export class HUD {
       })
       .setOrigin(1, 0.5);
 
+    this.pauzeKnop = scene.add
+      .text(0, 0, '❚❚', { fontFamily: LETTER, fontSize: '21px', color: '#bfe9ff' })
+      .setOrigin(0.5)
+      .setPadding(14)
+      .setVisible(false)
+      .setInteractive({ useHandCursor: true })
+      .on('pointerdown', opPauzeKnop);
+
     this.rechtsboven = scene.add
-      .container(0, 0, [this.geluidKnop, this.hint])
+      .container(0, 0, [this.geluidKnop, this.hint, this.pauzeKnop])
       .setScrollFactor(0)
       .setDepth(d);
 
@@ -205,16 +217,33 @@ export class HUD {
 
   herschaal(): void {
     const cam = this.scene.cameras.main;
-    this.container.setPosition(0, 0);
-    this.baasBox.setPosition(cam.width / 2, 58);
+    // Op een klein scherm schaalt de hele interface mee, anders vult hij alles.
+    const u = Phaser.Math.Clamp(Math.min(cam.width / 980, cam.height / 640), 0.56, 1);
+    this.schaal = u;
+
+    this.container.setPosition(0, 0).setScale(u);
+    this.baasBox.setPosition(cam.width / 2, 58 * u).setScale(u);
     this.raakRand.clear();
     this.raakRand.lineStyle(44, 0xff2b3c, 0.5);
     this.raakRand.strokeRect(-22, -22, cam.width + 44, cam.height + 44);
-    this.meldingBox.setPosition(cam.width / 2, cam.height - 62);
-    this.melding.setWordWrapWidth(Math.max(260, cam.width - 140));
+
+    // Meldingen blijven boven de knoppen op het scherm.
+    const onder = (this.aanraking ? 150 : 62) * u;
+    this.meldingBox.setPosition(cam.width / 2, cam.height - onder).setScale(u);
+    this.melding.setWordWrapWidth(Math.max(240, (cam.width - 140) / u));
     this.tekenPil();
-    this.rechtsboven.setPosition(cam.width - 46, 36);
+
+    this.rechtsboven.setPosition(cam.width - 46 * u, 36 * u).setScale(u);
     this.hint.setPosition(-34, 1);
+    this.pauzeKnop.setPosition(-48, 0);
+  }
+
+  /** Op een telefoon vervangt een pauzeknop de tekst "Esc = pauze". */
+  zetAanraking(aan: boolean): void {
+    this.aanraking = aan;
+    this.pauzeKnop.setVisible(aan);
+    this.hint.setVisible(!aan);
+    this.herschaal();
   }
 
   zetGeluid(uit: boolean): void {
@@ -278,11 +307,12 @@ export class HUD {
     this.melding.setText(tekst).setColor(kleur);
     this.tekenPil();
     this.scene.tweens.killTweensOf(this.meldingBox);
-    this.meldingBox.setAlpha(0).setScale(0.9);
+    const u = this.schaal;
+    this.meldingBox.setAlpha(0).setScale(u * 0.9);
     this.scene.tweens.add({
       targets: this.meldingBox,
       alpha: 1,
-      scale: 1,
+      scale: u,
       duration: 240,
       ease: 'Back.easeOut',
       onComplete: () => {

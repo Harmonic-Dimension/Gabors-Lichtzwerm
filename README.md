@@ -37,6 +37,9 @@ De gebouwde bestanden komen in `dist/` en werken ook zonder server
 
 ## Zo speel je
 
+Op een **telefoon of tablet** verschijnen de knoppen vanzelf op het scherm; op een
+desktop zie je ze niet. Zie [Op de telefoon](#op-de-telefoon).
+
 | Toets | Actie |
 |---|---|
 | Pijltjestoetsen | Vliegen in alle richtingen (ook diagonaal) |
@@ -100,6 +103,55 @@ uiteen in rode, blauwe en gouden deeltjes — en landt de kroon op jouw leidende
 bolletje, dat verandert in de nieuwe, vriendelijke Lichtkoning.
 
 ![De goede Lichtkoning](schermafbeeldingen/5-goede-lichtkoning.png)
+
+---
+
+## Op de telefoon
+
+Lichtzwerm herkent zelf of je met een vinger speelt. Het kijkt naar de soort
+aanwijzer, niet naar het schermformaat: een laptop met aanraakscherm én muis houdt
+gewoon toetsenbordbesturing, een telefoon krijgt knoppen op het scherm.
+
+- **Links: een zwevende joystick.** Zet je duim ergens in de linkerhelft neer en
+  sleep — daar verschijnt de stick. Hoe verder je sleept, hoe sneller je vliegt.
+  Zolang je hem nog nooit gebruikt hebt, staat er een rustig pulserende stick als
+  hint.
+- **Rechts: een grote knop.** Buiten de arena is dat **BOOST**, erin wordt het
+  **SCHIET** (ingedrukt houden om te blijven vuren) en komt er een kleine
+  boostknop naast.
+- **Rechtsboven: pauze en geluid**, in plaats van Esc en M.
+
+De interface schaalt mee met het scherm, blijft uit de camera-inkeping van de
+telefoon, en in portret staat er op het startscherm een vriendelijke hint om het
+toestel te draaien — liggend speelt het een stuk ruimer.
+
+![Op de telefoon](schermafbeeldingen/7-telefoon.png)
+
+> Testen op je laptop kan ook: zet `?touch=1` achter de URL om de knoppen af te
+> dwingen, of `?touch=0` om ze uit te zetten.
+
+---
+
+## Online zetten met Netlify
+
+Er staat een [`netlify.toml`](netlify.toml) klaar, dus Netlify hoeft niets te raden.
+
+1. Zet dit project op GitHub.
+2. Ga naar Netlify → **Add new site** → **Import an existing project** en kies de
+   repository.
+3. Build command en publish directory worden uit `netlify.toml` gelezen
+   (`npm run build` → `dist`). Klik op **Deploy**.
+
+Elke push naar de hoofdbranch zet er automatisch een nieuwe versie op. Liever
+handmatig, zonder GitHub:
+
+```bash
+npm run build
+npx netlify-cli deploy --prod --dir=dist
+```
+
+Het spel heeft geen server, geen database en geen API's nodig — het is puur
+statische bestanden, dus elke andere statische host werkt net zo goed.
 
 ---
 
@@ -180,7 +232,7 @@ src/
     audio.ts            ← Web Audio, geen geluidsbestanden
     render/             ← achtergrond met parallax, bolletjes-pool
     entities/           ← de Lichtkoning
-    ui/                 ← HUD en knoppen
+    ui/                 ← HUD, knoppen en de aanraakbesturing
     scenes/             ← MenuScene, SpelScene, EindScene
   main.ts
 tests/                  ← unit- en balanstests (vitest)
@@ -206,11 +258,15 @@ zodat je nooit verliest door één bolletje dat ver achterop raakt.
 ## Testen
 
 ```bash
-npm test            # unit- en balanstests (vitest, ~50 tests)
-npm run balans      # alleen de balans- en botsimulatie
+npm test              # unit- en balanstests (vitest, 67 tests)
+npm run balans        # alleen de balans- en botsimulatie
 npm run test:browser  # browsertests (Playwright, start zelf een dev-server)
-npm run test:alles  # allebei
+npm run test:alles    # allebei
 ```
+
+De browsertests draaien in twee smaken: `desktop` (toetsenbord) en `mobiel` (een
+liggend telefoonscherm met echt aanraakscherm). Eén smaak draaien kan met
+`npx playwright test --project=mobiel`.
 
 Eenmalig voor de browsertests: `npx playwright install chromium`.
 
@@ -233,6 +289,9 @@ De tests dekken onder andere:
   verliezen, gelijkspel, boost met afkoeltijd, de arena die sluit, schieten,
   de koning verslaan, het overwinningsscherm, opnieuw beginnen en "geen console
   errors".
+- Op een telefoon: dat de knoppen verschijnen (en op desktop juist níét), dat
+  slepen de zwerm laat vliegen, dat de knop rechts boost en in de arena schiet,
+  en dat alles in een staand scherm past.
 
 Schermafbeeldingen opnieuw maken (dev-server moet draaien):
 
@@ -262,12 +321,17 @@ npm run schermafbeeldingen
   omhoog springt, hij uiteenspat, en jij zelf verandert in de góede Lichtkoning.
 - Geluid volledig via de Web Audio API (geen bestanden), met mute-knop die
   onthouden wordt.
+- Een mobiele versie met joystick en knoppen op het scherm, die zichzelf alleen op
+  aanraakapparaten laat zien.
 - Alle spelerstekst in het Nederlands.
 
 ## Bekende beperkingen
 
-- Alleen toetsenbordbesturing: er is nog geen bediening voor touchscreens of
-  gamepads, dus op een tablet of telefoon kun je niet spelen.
+- Geen ondersteuning voor gamepads; toetsenbord en aanraakscherm wel.
+- Op een telefoon in portret is het speelveld smal. Het werkt, maar liggend speelt
+  het veel prettiger — daar wijst het startscherm ook op.
+- Op een oudere telefoon kan een zwerm van bijna honderd bolletjes de beeldsnelheid
+  drukken; dat is niet op echte toestellen gemeten.
 - Er is geen achtergrondmuziek, alleen geluidseffecten (bewuste keuze: werkende
   effecten gingen voor).
 - Er wordt niets opgeslagen tussen sessies behalve de geluidsinstelling — geen

@@ -79,4 +79,40 @@ await page.waitForTimeout(2600);
 await page.screenshot({ path: `${MAP}/6-eindscherm.png` });
 console.log('5-goede-lichtkoning.png, 6-eindscherm.png');
 
+// ---------------------------------------------------------------- telefoon
+const telefoon = await browser.newContext({
+  viewport: { width: 844, height: 390 },
+  isMobile: true,
+  hasTouch: true,
+});
+const tel = await telefoon.newPage();
+await tel.goto(URL);
+await tel.waitForFunction(() => !!window.__spel, null, { timeout: 30000 });
+await tel.waitForTimeout(1500);
+await tel.evaluate(() => window.__spel.scene.getScene('Menu').speel());
+await tel.waitForFunction(() => !!window.__lichtzwerm, null, { timeout: 20000 });
+await tel.evaluate(() => {
+  const h = window.__lichtzwerm;
+  h.zetAantal(72);
+  const b = h.model.wereld.baas;
+  h.teleport(b.thuisX - 430, b.thuisY + 70);
+});
+await tel.waitForFunction(() => window.__lichtzwerm.model.arenaActief, null, { timeout: 20000 });
+await tel.waitForTimeout(3000);
+// Even schieten, zodat de knoppen in actie te zien zijn.
+const vinger = await tel.context().newCDPSession(tel);
+const knop = await tel.evaluate(() => {
+  const k = window.__lichtzwerm.scene.aanraak.hoofdknop.container;
+  return { x: k.x, y: k.y };
+});
+await vinger.send('Input.dispatchTouchEvent', {
+  type: 'touchStart',
+  touchPoints: [{ x: knop.x, y: knop.y, id: 1 }],
+});
+await tel.waitForTimeout(900);
+await tel.screenshot({ path: `${MAP}/7-telefoon.png` });
+await vinger.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+console.log('7-telefoon.png');
+await telefoon.close();
+
 await browser.close();

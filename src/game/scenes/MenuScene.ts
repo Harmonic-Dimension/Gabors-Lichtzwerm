@@ -8,6 +8,7 @@ import { stuurZwerm, type FormatieAnker } from '../../core/flock';
 import { TAU, makeRng } from '../../core/mathx';
 import type { Bolletje, Nevel } from '../../core/types';
 import { geluid } from '../audio';
+import { gebruiktAanraking, isStaand } from '../ui/aanraken';
 import { maakKnop } from '../ui/knop';
 
 const LETTER = 'Trebuchet MS, Segoe UI, sans-serif';
@@ -106,7 +107,8 @@ export class MenuScene extends Phaser.Scene {
     const u = Phaser.Math.Clamp(Math.min(cam.height / 820, cam.width / 1280), 0.62, 1.15);
 
     const titelGrootte = Math.min(96, Math.max(40, cam.width * 0.082));
-    const titelY = cam.height * 0.17;
+    const staand = isStaand();
+    const titelY = cam.height * (staand ? 0.21 : 0.17);
 
     const titel = this.add
       .text(cx, titelY, 'LICHTZWERM', {
@@ -139,7 +141,7 @@ export class MenuScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setDepth(6);
 
-    const knopY = cam.height * 0.57;
+    const knopY = cam.height * (staand ? 0.52 : 0.57);
     const knopGloed = this.add
       .image(cx, knopY, TEX.gloed)
       .setBlendMode(Phaser.BlendModes.ADD)
@@ -166,7 +168,12 @@ export class MenuScene extends Phaser.Scene {
 
     const regelHoogte = Math.round(31 * u);
     const uitlegY = knopY + Math.round(78 * u);
-    const regels = ['Pijltjes = bewegen', 'Verzamel blauw licht', 'Versla kleinere rode groepen'];
+    const vinger = gebruiktAanraking();
+    const regels = [
+      vinger ? 'Sleep links om te vliegen' : 'Pijltjes = bewegen',
+      'Verzamel blauw licht',
+      'Versla kleinere rode groepen',
+    ];
     const uitleg: Phaser.GameObjects.Text[] = [];
     regels.forEach((r, i) => {
       uitleg.push(
@@ -181,10 +188,12 @@ export class MenuScene extends Phaser.Scene {
       );
     });
 
-    const kleineRegels = ['Spatie = supersnel!', 'In de arena: spatie = schieten'];
+    const kleineRegels = vinger
+      ? ['Knop rechts = supersnel!', 'In de arena: knop rechts = schieten']
+      : ['Spatie = supersnel!', 'In de arena: spatie = schieten'];
     const klein: Phaser.GameObjects.Text[] = kleineRegels.map((r, i) =>
       this.add
-        .text(cx, uitlegY + 3 * regelHoogte + Math.round((14 + i * 22) * u), r, {
+        .text(cx, uitlegY + 3 * regelHoogte + Math.round((14 + i * 23) * u), r, {
           fontFamily: LETTER,
           fontSize: `${Math.round(17 * u)}px`,
           color: '#7fb6e8',
@@ -205,6 +214,21 @@ export class MenuScene extends Phaser.Scene {
       });
 
     this.onderdelen = [gloed, titel, onder, knopGloed, knop.container, ...uitleg, ...klein, this.geluidKnop];
+
+    // Rechtop op een telefoon speelt het een stuk krapper.
+    if (vinger && staand) {
+      const draai = this.add
+        .text(cx, cam.height - Math.round(34 * u), '↻  Draai je telefoon voor een groter speelveld', {
+          fontFamily: LETTER,
+          fontSize: `${Math.round(15 * u)}px`,
+          color: '#8fd9ff',
+          align: 'center',
+          wordWrap: { width: cam.width - 40 },
+        })
+        .setOrigin(0.5, 1)
+        .setDepth(6);
+      this.onderdelen.push(draai);
+    }
   }
 
   private speel(): void {

@@ -15,6 +15,8 @@ import { BolPool, mengKleur, type BolStijl } from '../render/Bolletjes';
 import { Lichtkoning, maakGoedeKoning } from '../entities/Lichtkoning';
 import { HUD } from '../ui/HUD';
 import { geluid } from '../audio';
+import { Aanraakbesturing } from '../ui/Aanraakbesturing';
+import { gebruiktAanraking } from '../ui/aanraken';
 import { maakKnop } from '../ui/knop';
 
 const LETTER = 'Trebuchet MS, Segoe UI, sans-serif';
@@ -91,6 +93,7 @@ export class SpelScene extends Phaser.Scene {
   private arenaRing!: Phaser.GameObjects.Graphics;
   private arenaOpbouw = 0;
   private goedeKoning?: Phaser.GameObjects.Container;
+  private aanraak?: Aanraakbesturing;
   /** Aparte camera voor de interface, zodat de zoom van de wereld die niet meeschaalt. */
   private uiCam!: Phaser.Cameras.Scene2D.Camera;
 
@@ -134,6 +137,7 @@ export class SpelScene extends Phaser.Scene {
     this.boostGevraagd = false;
     this.arenaOpbouw = 0;
     this.goedeKoning = undefined;
+    this.aanraak = undefined;
     this.laatsteToets = {};
 
     this.model = new SpelModel(data?.seed);
@@ -216,16 +220,24 @@ export class SpelScene extends Phaser.Scene {
     this.cameras.main.startFollow(this.volgPunt, false, 0.1, 0.1);
     this.cameras.main.setZoom(1.05);
 
-    this.hud = new HUD(this, () => {
-      geluid.ontwaak();
-      this.hud.zetGeluid(geluid.wissel());
-    });
+    this.hud = new HUD(
+      this,
+      () => {
+        geluid.ontwaak();
+        this.hud.zetGeluid(geluid.wissel());
+      },
+      () => {
+        geluid.ontwaak();
+        this.wisselPauze();
+      },
+    );
     this.hud.zetGeluid(geluid.uit);
     this.cameras.main.ignore(this.hud.objecten());
 
     this.maakToetsen();
     this.maakPauzeLaag();
     this.cameras.main.ignore(this.pauzeLaag);
+    if (gebruiktAanraking()) this.maakAanraakbesturing();
 
     this.scale.on('resize', this.opHerschaal, this);
     this.events.once('shutdown', () => {
@@ -277,6 +289,14 @@ export class SpelScene extends Phaser.Scene {
   private wereld<T extends Phaser.GameObjects.GameObject>(o: T): T {
     this.uiCam.ignore(o);
     return o;
+  }
+
+  /** Knoppen op het scherm, alleen op telefoons en tablets. */
+  private maakAanraakbesturing(): void {
+    if (this.aanraak) return;
+    this.aanraak = new Aanraakbesturing(this);
+    this.cameras.main.ignore(this.aanraak.objecten());
+    this.hud.zetAanraking(true);
   }
 
   // ------------------------------------------------------------------ input
@@ -336,8 +356,9 @@ export class SpelScene extends Phaser.Scene {
       return { x: 0, y: 0, boost: false, schiet: false };
     }
     const t = this.toetsen;
-    let x = 0;
-    let y = 0;
+    const vinger = this.aanraak?.lees();
+    let x = vinger ? vinger.x : 0;
+    let y = vinger ? vinger.y : 0;
     if (t.links.isDown || t.a.isDown) x -= 1;
     if (t.rechts.isDown || t.d.isDown) x += 1;
     if (t.op.isDown || t.w.isDown) y -= 1;
@@ -352,8 +373,8 @@ export class SpelScene extends Phaser.Scene {
     return {
       x,
       y,
-      boost: t.shift.isDown || (!arena && spatie),
-      schiet: arena && (spatie || t.spatie.isDown),
+      boost: t.shift.isDown || (!arena && spatie) || (vinger?.boost ?? false),
+      schiet: (arena && (spatie || t.spatie.isDown)) || (vinger?.schiet ?? false),
     };
   }
 
@@ -432,6 +453,7 @@ export class SpelScene extends Phaser.Scene {
     this.uiCam?.setSize(this.scale.width, this.scale.height);
     this.achtergrond?.herschaal(cam.width, cam.height);
     this.hud?.herschaal();
+    this.aanraak?.herschaal();
     if (!this.pauzeLaag) return;
     const scherm = this.pauzeLaag.getData('scherm') as Phaser.GameObjects.Rectangle;
     scherm.setSize(cam.width, cam.height);
@@ -478,6 +500,14 @@ export class SpelScene extends Phaser.Scene {
     );
     this.updateCamera(dt);
     this.updateHud();
+
+    // Een tablet of telefoon mag halverwege alsnog knoppen krijgen.
+    if (!this.aanraak && gebruiktAanraking()) this.maakAanraakbesturing();
+    if (this.aanraak) {
+      this.aanraak.zetArena(this.model.arenaActief && !this.model.wereld.baas.verslagen);
+      this.aanraak.zetActief(!this.model.gepauzeerd && !this.afgelopen);
+      this.aanraak.update(dt);
+    }
 
     if (this.kroon) {
       const leider = this.model.speler.bolletjes[0];
