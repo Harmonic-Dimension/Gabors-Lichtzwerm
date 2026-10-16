@@ -1,0 +1,37 @@
+# Lichtzwerm op fly.io — een statische site achter nginx.
+#
+# Eerste keer:   fly launch --no-deploy --copy-config --name lichtzwerm
+# Daarna:        fly deploy
+# (Zonder Docker op je eigen machine: fly deploy --remote-only)
+
+app = "lichtzwerm"
+primary_region = "ams"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  # Het spel heeft geen server nodig: de machine mag slapen als niemand speelt.
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+  processes = ["app"]
+
+  [http_service.concurrency]
+    type = "requests"
+    soft_limit = 200
+    hard_limit = 250
+
+[[http_service.checks]]
+  interval = "30s"
+  timeout = "5s"
+  grace_period = "5s"
+  method = "GET"
+  path = "/"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"
+  cpus = 1

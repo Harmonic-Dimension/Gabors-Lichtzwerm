@@ -132,26 +132,39 @@ toestel te draaien — liggend speelt het een stuk ruimer.
 
 ---
 
-## Online zetten met Netlify
+## Online zetten
 
-Er staat een [`netlify.toml`](netlify.toml) klaar, dus Netlify hoeft niets te raden.
+Lichtzwerm is puur statisch: geen server, geen database, geen API's. Elke
+statische host kan het serveren.
 
-1. Zet dit project op GitHub.
-2. Ga naar Netlify → **Add new site** → **Import an existing project** en kies de
-   repository.
-3. Build command en publish directory worden uit `netlify.toml` gelezen
-   (`npm run build` → `dist`). Klik op **Deploy**.
+### fly.io (aanbevolen)
 
-Elke push naar de hoofdbranch zet er automatisch een nieuwe versie op. Liever
-handmatig, zonder GitHub:
+Er staan een [`Dockerfile`](Dockerfile), [`nginx.conf`](nginx.conf) en
+[`fly.toml`](fly.toml) klaar. De build gebeurt in de image, nginx serveert
+`dist/` op poort 8080, en de machine mag slapen als er niemand speelt.
 
 ```bash
-npm run build
-npx netlify-cli deploy --prod --dir=dist
+fly launch --no-deploy --copy-config --name lichtzwerm   # eenmalig
+fly deploy                                                # elke keer daarna
 ```
 
-Het spel heeft geen server, geen database en geen API's nodig — het is puur
-statische bestanden, dus elke andere statische host werkt net zo goed.
+Geen Docker op je eigen machine? Laat Fly de image bouwen:
+
+```bash
+fly deploy --remote-only
+```
+
+Pas `app` en `primary_region` in `fly.toml` aan naar jouw naam en regio.
+
+### Netlify
+
+[`netlify.toml`](netlify.toml) staat er ook nog: koppel de repository in Netlify
+en build command en publish-map worden daaruit gelezen (`npm run build` →
+`dist`).
+
+> Let op: op het gratis pakket zet Netlify rechtsonder een "Powered by
+> Netlify"-badge — precies waar op een telefoon de schietknop zit. Dat is de
+> reden dat fly.io hierboven staat.
 
 ---
 
@@ -219,6 +232,8 @@ dan passen de teksten, de tests en de pijl-naar-de-baas zich vanzelf aan.
 ## Projectstructuur
 
 ```text
+Dockerfile, nginx.conf    ← de image die fly.io draait
+fly.toml, netlify.toml    ← hostingconfiguratie
 src/
   core/                 ← alle spelregels, zonder Phaser (en dus direct testbaar)
     config.ts           ← alle instelbare getallen
@@ -234,7 +249,8 @@ src/
     entities/           ← de Lichtkoning
     ui/                 ← HUD, knoppen en de aanraakbesturing
     scenes/             ← MenuScene, SpelScene, EindScene
-  main.ts
+    schermmaat.ts       ← bepaalt een veilige canvasmaat
+  main.ts               ← start het spel pas als de pagina is opgemeten
 tests/                  ← unit- en balanstests (vitest)
 tests/browser/          ← browsertests (Playwright)
 scripts/                ← schermafbeeldingen maken
@@ -272,6 +288,9 @@ Eenmalig voor de browsertests: `npx playwright install chromium`.
 
 De tests dekken onder andere:
 
+- Dat het spel nooit met een canvas van 0 bij 0 start. Doet het dat wel, dan
+  mislukt de WebGL-framebuffer en start het spel helemaal niet meer — dat is op
+  een trage of verborgen pagina echt gebeurd.
 - De spelregels: 8 vs 5 → 13, 8 vs 12 → verloren, 8 vs 8 → gelijkspel, elke groep
   maar één keer, correct doortellen.
 - Het eindgevecht: met 65 bolletjes blijft de arena dicht, met 66 gaat hij open;

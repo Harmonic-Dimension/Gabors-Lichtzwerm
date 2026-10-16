@@ -37,6 +37,15 @@ body {
   touch-action: none;
 }
 
+.storing {
+  position: absolute;
+  inset: auto 1.5rem 2rem 1.5rem;
+  margin: 0;
+  text-align: center;
+  color: #ffc9cf;
+  font-size: 1rem;
+}
+
 noscript {
   display: block;
   padding: 2rem;
